@@ -2,11 +2,14 @@ package infinity.app.yourway;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.cardview.widget.CardView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
 
 import android.Manifest;
+import android.animation.LayoutTransition;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -22,10 +25,14 @@ import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
+import android.transition.AutoTransition;
+import android.transition.TransitionManager;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -52,6 +59,7 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptor;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnSuccessListener;
@@ -61,6 +69,7 @@ import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
+import com.google.maps.android.SphericalUtil;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -81,16 +90,31 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     private double lat;
     private double lng;
+    double distance_between_user_and_bus;
+
+    LatLng passenger_location = new LatLng(lat, lng);
     private LocationRequest locationRequest;
 
     String url;
     RequestQueue queue;
+
+    String url_search;
+    RequestQueue queue_search;
+
     JsonArrayRequest jsonArrayRequest;
+    JsonArrayRequest jsonArrayRequest2;
     DatabaseReference db;
     BusModel bus = new BusModel();
 
     ImageView search;
     EditText searchtext;
+    CardView bus_info_card;
+    ImageView close;
+    TextView bus_number;
+    TextView estimate_time;
+    TextView route;
+    TextView distance;
+    TextView destination;
 
     private final static int REQUEST_CODE=100;
 
@@ -115,12 +139,25 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         locationRequest.setInterval(5000);
         locationRequest.setFastestInterval(2000);
 
+        bus_info_card = findViewById(R.id.bus_info_card);
+        close = findViewById(R.id.close);
+        bus_number = findViewById(R.id.bus_number);
+        estimate_time = findViewById(R.id.estimate_time);
+        route = findViewById(R.id.route);
+        distance = findViewById(R.id.distance);
+        destination = findViewById(R.id.destination);
 
+        close.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                bus_info_card.setVisibility(View.GONE);
+            }
+        });
         getCurrentLocation();
         get_searched_locations();
 
     }
-
+        //this segment check check whether mobile device gps permissions granted or not. if permission already granted, it gets current user location
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -154,6 +191,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
+    //this segment get gps coordinates
     private void getCurrentLocation() {
 
 
@@ -177,6 +215,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                         double latitude = locationResult.getLocations().get(index).getLatitude();
                                         double longitude = locationResult.getLocations().get(index).getLongitude();
 
+                                        lat = latitude;
+                                        lng = longitude;
+
                                         Toast.makeText(MapsActivity.this, "Latitude: "+latitude, Toast.LENGTH_SHORT).show();
                                         Toast.makeText(MapsActivity.this, "Longitude: "+longitude, Toast.LENGTH_SHORT).show();
 
@@ -184,7 +225,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                         mMap.addMarker(
                                                 new MarkerOptions()
                                                         .position(LK)
-                                                        .title("Marker in Sydney")
+                                                        .title("Marker in LK")
                                                         .icon(bitmapDescriptorFromVector(MapsActivity.this, R.drawable.location)));
                                         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(LK, 15));
                                     }
@@ -209,6 +250,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         return BitmapDescriptorFactory.fromBitmap(bitmap);
     }
 
+    //if gps turned off, then send message to user
     private void turnOnGPS() {
 
 
@@ -274,16 +316,20 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
      * it inside the SupportMapFragment. This method will only be triggered once the user has
      * installed Google Play services and returned to the app.
      */
+    //set google maps default marker
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
         // Add a marker in Sydney and move the camera
-        LatLng sydney = new LatLng(lat, lng);
-        mMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Sydney"));
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(sydney));
+        LatLng LK = new LatLng(lat, lng);
+        mMap.addMarker(new MarkerOptions().position(LK).title("Marker In Sri Lanka"));
+        mMap.moveCamera(CameraUpdateFactory.newLatLng(LK));
+
     }
 
+
+    //this segment call Spring boot API and get available bus results according to the search string
     private void get_searched_locations() {
 
         db = FirebaseDatabase.getInstance().getReference();
@@ -297,6 +343,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         queue = Volley.newRequestQueue(this);
 
 
+
+        queue_search = Volley.newRequestQueue(this);
+
         jsonArrayRequest = new JsonArrayRequest(Request.Method.GET, url, null, new Response.Listener<JSONArray>() {
             @Override
             public void onResponse(JSONArray response) {
@@ -306,12 +355,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         JSONObject jsn = response.getJSONObject(i);
                         int j = i;
                         String busNO = jsn.getString("bus_no");
-                        Toast.makeText(MapsActivity.this, busNO, Toast.LENGTH_SHORT).show();
+
+
+                        //Toast.makeText(MapsActivity.this, busNO, Toast.LENGTH_SHORT).show();
 
                         //start realtime data tracking
                         final ArrayList<String> list = new ArrayList<>();
 
                         db.child("buses").child(" "+busNO).addValueEventListener(new ValueEventListener() {
+                            @SuppressLint("PotentialBehaviorOverride")
                             @Override
                             public void onDataChange(@NonNull DataSnapshot snapshot) {
 
@@ -321,7 +373,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                 }
 
                                 for(DataSnapshot dataSnapshot : snapshot.getChildren()){
-                                    list.clear();
+//                                    list.clear();
 
 
 
@@ -352,11 +404,70 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                                     .position(LK)
                                                     .title(busNO)
                                                     .icon(bitmapDescriptorFromVector(MapsActivity.this, R.drawable.icl_bus)));
+
                                     mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(LK, 15));
+
                                     System.out.println("njnout "+bus.lat + ", " + bus.lng);
                                 }
+                                mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
+                                    @Override
+                                    public boolean onMarkerClick(@NonNull Marker marker) {
+
+
+                                        url_search = "https://demo-njn.herokuapp.com/searchBus?bus_no="+marker.getTitle();
+                                        jsonArrayRequest2 = new JsonArrayRequest(Request.Method.GET, url_search, null, new Response.Listener<JSONArray>() {
+                                            @Override
+                                            public void onResponse(JSONArray response) {
+
+                                                try {
+                                                    JSONObject bus_info = response.getJSONObject(0);
+                                                    String s_bus_number = bus_info.getString("bus_no");
+                                                    String s_bus_route = bus_info.getString("route");
+                                                    String s_bus_destination = bus_info.getString("destination");
+
+                                                    bus_number.setText(s_bus_number);
+                                                    route.setText("Route: "+s_bus_route);
+                                                    destination.setText(s_bus_destination);
+                                                    db.child("buses").child(" "+s_bus_number).addValueEventListener(new ValueEventListener() {
+                                                                                                                        @Override
+                                                                                                                        public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                                                                                                            bus = snapshot.getValue(BusModel.class);
+                                                                                                                            LatLng passenger_location = new LatLng(lat, lng);
+                                                                                                                            LatLng bus_location = new LatLng(Double.valueOf(bus.lat), Double.valueOf(bus.lng));
+
+                                                                                                                            double distance_between_passenger_and_bus = SphericalUtil.computeDistanceBetween(passenger_location, bus_location);
+                                                                                                                            distance.setText("Distance: "+String.format("%.2f", distance_between_passenger_and_bus / 1000)+"Km");
+
+//
+
+                                                                                                                        }
+
+                                                                                                                        @Override
+                                                                                                                        public void onCancelled(@NonNull DatabaseError error) {
+
+                                                                                                                        }
+                                                                                                                    });
+                                                    bus_info_card.setVisibility(View.VISIBLE);
+                                                    Log.d("TEST", String.valueOf(bus_info));
+                                                } catch (JSONException e) {
+                                                    e.printStackTrace();
+                                                }
+
+                                            }
+                                        }, new Response.ErrorListener() {
+                                            @Override
+                                            public void onErrorResponse(VolleyError error) {
+
+                                            }
+                                        });
+                                        queue_search.add(jsonArrayRequest2);
+
+                                        return true;
+                                    }
+                                });
                                 //Log.d("TEST", snapshot.getValue().toString());
                                 //Log.d("TEST", list.toString());
+
                             }
 
 
@@ -392,5 +503,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
 
 
+    }
+
+    LinearLayout details;
+    LinearLayout layout;
+    public void expand(View view) {
+        details = findViewById(R.id.details);
+        layout = findViewById(R.id.layout);
+        layout.getLayoutTransition().enableTransitionType(LayoutTransition.CHANGING);
+
+        int v = (details.getVisibility() == View.GONE)? View.VISIBLE: View.GONE;
+        TransitionManager.beginDelayedTransition(layout, new AutoTransition());
+        details.setVisibility(v);
     }
 }
