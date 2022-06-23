@@ -33,6 +33,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -41,6 +42,7 @@ import com.android.volley.RequestQueue;
 import com.android.volley.Response;
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.JsonArrayRequest;
+import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.ResolvableApiException;
@@ -81,7 +83,12 @@ import java.util.List;
 import java.util.Locale;
 
 import infinity.app.yourway.Model.BusModel;
+import infinity.app.yourway.Model.LoggedUser;
+import infinity.app.yourway.Model.PassengerModel;
+import infinity.app.yourway.activity.ComplainActivity;
+import infinity.app.yourway.activity.LoginActivity;
 import infinity.app.yourway.databinding.ActivityMapsBinding;
+import infinity.app.yourway.tools.Utils;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
 
@@ -101,8 +108,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     String url_search;
     RequestQueue queue_search;
 
+    String url_search3;
+    RequestQueue queue_search3;
     JsonArrayRequest jsonArrayRequest;
     JsonArrayRequest jsonArrayRequest2;
+    JsonArrayRequest jsonArrayRequest3;
     DatabaseReference db;
     BusModel bus = new BusModel();
 
@@ -115,6 +125,21 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     TextView route;
     TextView distance;
     TextView destination;
+    Button complain;
+
+    String bus_id;
+
+    RequestQueue myrequestQueue;
+    JsonObjectRequest myjsonArrayRequest;
+    String myurl;
+
+    Button button;
+    PassengerModel loggedInUser;
+
+    ProgressBar progressBar;
+    CardView cardView;
+
+
 
     private final static int REQUEST_CODE=100;
 
@@ -127,12 +152,22 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         binding = ActivityMapsBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
+        loggedInUser = Utils.get_logged_in_user();
+        if(loggedInUser == null){
+            Toast.makeText(this, "You are not logged in", Toast.LENGTH_SHORT).show();
+            Intent i = new Intent(this, LoginActivity.class);
+            this.startActivity(i);
+            finish();
+            return;
+        }
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-
+        LoggedUser loggedUser = new LoggedUser();
+        loggedUser.passenger = loggedInUser;
+        Log.d("UserID", loggedUser.passenger.getNic());
 
         locationRequest = LocationRequest.create();
         locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
@@ -146,6 +181,20 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         route = findViewById(R.id.route);
         distance = findViewById(R.id.distance);
         destination = findViewById(R.id.destination);
+        complain = findViewById(R.id.btn_complain);
+        //progress bar and card view
+        progressBar = findViewById(R.id.progressBar);
+        cardView = findViewById(R.id.card);
+        cardView.setVisibility(View.GONE);
+
+        button = findViewById(R.id.button);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(MapsActivity.this, LoginActivity.class);
+                MapsActivity.this.startActivity(intent);
+            }
+        });
 
         close.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -155,9 +204,29 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         });
         getCurrentLocation();
         get_searched_locations();
+        send_complain();
 
     }
-        //this segment check check whether mobile device gps permissions granted or not. if permission already granted, it gets current user location
+
+    private void send_complain() {
+
+        complain.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                LoggedUser loggedUser = new LoggedUser();
+                loggedUser.passenger = loggedInUser;
+                Log.d("UserID", loggedUser.passenger.getNic());
+                Intent i = new Intent(MapsActivity.this, ComplainActivity.class);
+                i.putExtra("bus_id", bus_id);
+                i.putExtra("user_id", loggedUser.passenger.getNic());
+                MapsActivity.this.startActivity(i);
+                //Toast.makeText(MapsActivity.this, "You clicked at: "+bus_id, Toast.LENGTH_SHORT).show();
+
+            }
+        });
+    }
+
+    //this segment check check whether mobile device gps permissions granted or not. if permission already granted, it gets current user location
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -345,10 +414,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
 
         queue_search = Volley.newRequestQueue(this);
+        queue_search3 = Volley.newRequestQueue(this);
+
+        myrequestQueue = Volley.newRequestQueue(this);
+
 
         jsonArrayRequest = new JsonArrayRequest(Request.Method.GET, url, null, new Response.Listener<JSONArray>() {
             @Override
             public void onResponse(JSONArray response) {
+                cardView.setVisibility(View.GONE);
                 int i;
                 for(i=0; i<response.length(); i++){
                     try {
@@ -407,18 +481,20 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
                                     mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(LK, 15));
 
-                                    System.out.println("njnout "+bus.lat + ", " + bus.lng);
+                                    //System.out.println("njnout "+bus.lat + ", " + bus.lng);
                                 }
                                 mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
                                     @Override
                                     public boolean onMarkerClick(@NonNull Marker marker) {
 
-
+                                        cardView.setVisibility(View.VISIBLE);
                                         url_search = "https://demo-njn.herokuapp.com/searchBus?bus_no="+marker.getTitle();
+                                        bus_id = marker.getTitle();
+
                                         jsonArrayRequest2 = new JsonArrayRequest(Request.Method.GET, url_search, null, new Response.Listener<JSONArray>() {
                                             @Override
                                             public void onResponse(JSONArray response) {
-
+                                                cardView.setVisibility(View.GONE);
                                                 try {
                                                     JSONObject bus_info = response.getJSONObject(0);
                                                     String s_bus_number = bus_info.getString("bus_no");
@@ -432,11 +508,48 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                                                                                                         @Override
                                                                                                                         public void onDataChange(@NonNull DataSnapshot snapshot) {
                                                                                                                             bus = snapshot.getValue(BusModel.class);
-                                                                                                                            LatLng passenger_location = new LatLng(lat, lng);
-                                                                                                                            LatLng bus_location = new LatLng(Double.valueOf(bus.lat), Double.valueOf(bus.lng));
 
-                                                                                                                            double distance_between_passenger_and_bus = SphericalUtil.computeDistanceBetween(passenger_location, bus_location);
-                                                                                                                            distance.setText("Distance: "+String.format("%.2f", distance_between_passenger_and_bus / 1000)+"Km");
+                                                                                                                            myurl = "https://maps.googleapis.com/maps/api/distancematrix/json?origins="+lat+","+lng+"&destinations="+bus.lat+","+bus.lng+"&key=AIzaSyAVSbwauyfVApyx8JMdZaYa6uGfPDsNPEA";
+
+
+                                                                                                                            myjsonArrayRequest = new JsonObjectRequest(Request.Method.GET, myurl, null, new Response.Listener<JSONObject>() {
+                                                                                                                                @Override
+                                                                                                                                public void onResponse(JSONObject response) {
+                                                                                                                                    try {
+                                                                                                                                        JSONObject jsonObject = new JSONObject(String.valueOf(response));
+                                                                                                                                        JSONArray rows = jsonObject.getJSONArray("rows");
+                                                                                                                                        JSONObject col = rows.getJSONObject(0);
+                                                                                                                                        JSONArray col2 = col.getJSONArray("elements");
+                                                                                                                                        JSONObject col3 = col2.getJSONObject(0);
+                                                                                                                                        JSONObject API_distance = col3.getJSONObject("distance");
+                                                                                                                                        JSONObject API_duration = col3.getJSONObject("duration");
+                                                                                                                                        String M_distance = API_distance.getString("text") ;
+                                                                                                                                        String M_duration = API_duration.getString("text") ;
+                                                                                                                                        distance.setText(M_distance);
+                                                                                                                                        estimate_time.setText(M_duration);
+                                                                                                                                        Log.d("NJN", M_distance);
+                                                                                                                                        Log.d("NJN", M_duration);
+                                                                                                                                    } catch (JSONException e) {
+                                                                                                                                        e.printStackTrace();
+                                                                                                                                    }
+
+
+                                                                                                                                }
+                                                                                                                            }, new Response.ErrorListener() {
+                                                                                                                                @Override
+                                                                                                                                public void onErrorResponse(VolleyError error) {
+                                                                                                                                    Toast.makeText(MapsActivity.this, "failed"+error.getMessage(), Toast.LENGTH_SHORT).show();
+                                                                                                                                    Log.d("NJN", error.getMessage());
+                                                                                                                                }
+                                                                                                                            });
+                                                                                                                            queue.add(myjsonArrayRequest);
+
+                                                                                                                            //https://maps.googleapis.com/maps/api/distancematrix/json?origins=7.996584,80.938014&destinations=8.002034,80.924301&key=AIzaSyAVSbwauyfVApyx8JMdZaYa6uGfPDsNPEA
+//                                                                                                                            LatLng passenger_location = new LatLng(lat, lng);
+//                                                                                                                            LatLng bus_location = new LatLng(Double.valueOf(bus.lat), Double.valueOf(bus.lng));
+//
+//                                                                                                                            double distance_between_passenger_and_bus = SphericalUtil.computeDistanceBetween(passenger_location, bus_location);
+//                                                                                                                            distance.setText("Distance: "+String.format("%.2f", distance_between_passenger_and_bus / 1000)+"Km");
 
 //
 
@@ -448,7 +561,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                                                                                                         }
                                                                                                                     });
                                                     bus_info_card.setVisibility(View.VISIBLE);
-                                                    Log.d("TEST", String.valueOf(bus_info));
+                                                    //Log.d("TEST", String.valueOf(bus_info));
                                                 } catch (JSONException e) {
                                                     e.printStackTrace();
                                                 }
@@ -457,7 +570,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                         }, new Response.ErrorListener() {
                                             @Override
                                             public void onErrorResponse(VolleyError error) {
-
+                                                cardView.setVisibility(View.GONE);
                                             }
                                         });
                                         queue_search.add(jsonArrayRequest2);
@@ -490,6 +603,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }, new Response.ErrorListener() {
             @Override
             public void onErrorResponse(VolleyError error) {
+                cardView.setVisibility(View.GONE);
                 //textView.setText(error.toString());
             }
         });
@@ -497,7 +611,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         search.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                cardView.setVisibility(View.VISIBLE);
                 queue.add(jsonArrayRequest);
+
             }
         });
 
@@ -515,5 +631,20 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         int v = (details.getVisibility() == View.GONE)? View.VISIBLE: View.GONE;
         TransitionManager.beginDelayedTransition(layout, new AutoTransition());
         details.setVisibility(v);
+    }
+
+
+
+
+    public void log_out(View view) {
+        try {
+            PassengerModel.deleteAll(PassengerModel.class);
+            Toast.makeText(this, "Logged you out successfully!", Toast.LENGTH_LONG).show();
+            Intent i = new Intent(MapsActivity.this, MapsActivity.class);
+            i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            MapsActivity.this.startActivity(i);
+        } catch (Exception e) {
+            Toast.makeText(this, "Failed to Log you out because " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 }
