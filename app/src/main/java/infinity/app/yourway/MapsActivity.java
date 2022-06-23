@@ -87,6 +87,7 @@ import infinity.app.yourway.Model.LoggedUser;
 import infinity.app.yourway.Model.PassengerModel;
 import infinity.app.yourway.activity.ComplainActivity;
 import infinity.app.yourway.activity.LoginActivity;
+import infinity.app.yourway.activity.RegisterActivity;
 import infinity.app.yourway.databinding.ActivityMapsBinding;
 import infinity.app.yourway.tools.Utils;
 
@@ -191,7 +192,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent intent = new Intent(MapsActivity.this, LoginActivity.class);
+                Intent intent = new Intent(MapsActivity.this, RegisterActivity.class);
                 MapsActivity.this.startActivity(intent);
             }
         });

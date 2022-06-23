@@ -37,6 +37,7 @@ public class LoginActivity extends AppCompatActivity {
     Button login;
     TextView nic_msg;
     TextView password_msg;
+    TextView register;
 
     private DatabaseReference db;
 
@@ -61,6 +62,15 @@ public class LoginActivity extends AppCompatActivity {
         login = findViewById(R.id.sign_in_button);
         nic_msg = findViewById(R.id.nic_message);
         password_msg = findViewById(R.id.password_message);
+        register = findViewById(R.id.register);
+
+        register.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(LoginActivity.this, RegisterActivity.class);
+                LoginActivity.this.startActivity(intent);
+            }
+        });
 
         login.setOnClickListener(new View.OnClickListener() {
             @Override

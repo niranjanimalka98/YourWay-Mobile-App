@@ -15,7 +15,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.YourWay">
         <activity
-            android:name=".RegisterActivity"
+            android:name=".activity.RegisterActivity"
             android:exported="false" />
         <activity
             android:name=".activity.ComplainActivity"
