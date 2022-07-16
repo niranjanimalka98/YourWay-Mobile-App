@@ -44,6 +44,7 @@ import com.android.volley.VolleyError;
 import com.android.volley.toolbox.JsonArrayRequest;
 import com.android.volley.toolbox.JsonObjectRequest;
 import com.android.volley.toolbox.Volley;
+import com.bumptech.glide.Glide;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.ResolvableApiException;
 import com.google.android.gms.location.FusedLocationProviderClient;
@@ -139,6 +140,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     ProgressBar progressBar;
     CardView cardView;
+    Context context1;
+    ImageView user_profile;
+    CardView user_profile_card;
+    ImageView profile_close;
+    TextView user_name;
+    TextView user_email;
+    ImageView user_image_large;
 
 
 
@@ -166,9 +174,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-        LoggedUser loggedUser = new LoggedUser();
-        loggedUser.passenger = loggedInUser;
-        Log.d("UserID", loggedUser.passenger.getNic());
 
         locationRequest = LocationRequest.create();
         locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
@@ -188,6 +193,25 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         cardView = findViewById(R.id.card);
         cardView.setVisibility(View.GONE);
 
+        user_profile = findViewById(R.id.user_image);
+        user_profile_card = findViewById(R.id.user_profile_card);
+        profile_close = findViewById(R.id.profile_close);
+        user_name = findViewById(R.id.user_name);
+        user_email = findViewById(R.id.user_email);
+        user_image_large = findViewById(R.id.user_image_large);
+
+        LoggedUser loggedUser = new LoggedUser();
+        loggedUser.passenger = loggedInUser;
+        Log.d("Userphoto", loggedUser.passenger.getProfile_photo());
+
+            Glide.with(this)
+                    .load(loggedUser.passenger.getProfile_photo())
+                    .into(user_profile);
+
+
+
+
+
         button = findViewById(R.id.button);
         button.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -206,7 +230,33 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         getCurrentLocation();
         get_searched_locations();
         send_complain();
+        click_user_image();
 
+    }
+
+    @SuppressLint("SetTextI18n")
+    private void click_user_image() {
+        LoggedUser loggedUser = new LoggedUser();
+        loggedUser.passenger = loggedInUser;
+        user_name.setText(loggedUser.passenger.getFirst_name()+" "+loggedUser.passenger.getLast_name());
+        user_email.setText(loggedUser.passenger.getEmail());
+        Glide.with(this)
+                .load(loggedUser.passenger.getProfile_photo())
+                .into(user_image_large);
+
+        user_profile.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                user_profile_card.setVisibility(View.VISIBLE);
+            }
+        });
+
+        profile_close.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                user_profile_card.setVisibility(View.GONE);
+            }
+        });
     }
 
     private void send_complain() {
